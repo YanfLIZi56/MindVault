@@ -1,0 +1,239 @@
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.yanglizi.diary.mapper.DiaryMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into diaries
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            user_id,
+            status,
+            version,
+            version_group,
+            is_current,
+            source_type,
+            <if test="content != null and content != ''">content,</if>
+            <if test="diaryDate != null">diary_date,</if>
+            <if test="emotions != null and emotions.size > 0">emotions,</if>
+            <if test="emotionScore != null">emotion_score,</if>
+            <if test="confirmedAt != null">confirmed_at,</if>
+        </trim>
+        values
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            #{userId},
+            #{status},
+            #{version},
+            #{versionGroup},
+            #{isCurrent},
+            #{sourceType},
+            <if test="content != null and content != ''">#{content},</if>
+            <if test="diaryDate != null">#{diaryDate},</if>
+            <if test="emotions != null and emotions.size > 0">#{emotions},</if>
+            <if test="emotionScore != null">#{emotionScore},</if>
+            <if test="confirmedAt != null">#{confirmedAt},</if>
+        </trim>
+    </insert>
+    <update id="updateStatusAndContent">
+        update diaries
+        set status = #{status}, content = #{content}
+        where id = #{diaryId}
+    </update>
+    <update id="update">
+        UPDATE diaries
+        <set>
+            <if test="diaryDate != null">
+                diary_date = #{diaryDate},
+            </if>
+            <if test="sourceType != null">
+                source_type = #{sourceType},
+            </if>
+            <if test="emotions != null and emotions.size > 0">
+                emotions = #{emotions, typeHandler=com.yanglizi.common.handler.ArrayTypeHandler},
+            </if>
+            <if test="emotionScore != null">
+                emotion_score = #{emotionScore},
+            </if>
+            <if test="content != null and content != ''">
+                content = #{content},
+            </if>
+            <if test="versionGroup != null and versionGroup != ''">
+                version_group = #{versionGroup},
+            </if>
+            <if test="version != null and version != 0">
+                version = #{version},
+            </if>
+            <if test="isCurrent != null">
+                is_current = #{isCurrent},
+            </if>
+            <if test="confirmedAt != null">
+                confirmed_at = #{confirmedAt},
+            </if>
+            <if test="deletedAt != null">
+                deleted_at = #{deletedAt},
+            </if>
+            <if test="status != null">
+                status = #{status},
+            </if>
+            updated_at = now()
+        </set>
+        WHERE id = #{id}
+    </update>
+    <update id="closeCurrent">
+        update diaries set is_current = 0 where user_id = #{userId} and version_group = #{versionGroup} and is_current = 1
+    </update>
+    <select id="selectDiaryById" resultType="com.yanglizi.diary.pojo.entry.Diary">
+        select id,
+               user_id,
+               diary_date,
+               source_type,
+               emotions,
+               emotion_score,
+               content,
+               version_group,
+               version,
+               is_current,
+               confirmed_at,
+               created_at,
+               updated_at,
+               status
+        from diaries where id = #{id}
+    </select>
+    <select id="selectCurrentDiaryIdsByEmotionScore" resultType="java.lang.Integer">
+        select id
+        from diaries
+        <where>
+            <if test="emotionScore != null">
+                emotion_score &gt;= #{emotionScore}
+            </if>
+            and user_id = #{userId}
+            and is_current = 1
+        </where>
+    </select>
+    <select id="searchByFullText" resultType="com.yanglizi.diary.pojo.dto.DiarySearchResult">
+        SELECT
+            id,
+            content,
+            user_id AS userId,
+            emotion_score AS emotionScore,
+            paradedb.score(id) AS score
+        FROM diaries
+        WHERE user_id = #{userId}
+          AND is_current = 1
+          AND deleted_at = 0
+          AND content @@@ #{query}
+        ORDER BY score DESC
+            LIMIT #{limit}
+    </select>
+    <select id="selectByIds" resultType="com.yanglizi.diary.pojo.entry.Diary">
+        SELECT
+            id,
+            user_id,
+            diary_date,
+            source_type,
+            emotions,
+            emotion_score,
+            content,
+            version_group,
+            version,
+            is_current,
+            confirmed_at,
+            created_at,
+            updated_at,
+            status
+        FROM diaries
+        WHERE delete_at is null AND id IN
+        <foreach item="id" collection="ids" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+    </select>
+    <select id="getDiaryById" resultType="com.yanglizi.diary.pojo.vo.DiaryVo">
+        SELECT
+            id,
+            diary_date,
+            source_type,
+            emotions,
+            emotion_score,
+            content,
+            version_group,
+            version,
+            is_current,
+            confirmed_at,
+            created_at,
+            updated_at,
+            status
+        FROM diaries
+        WHERE id = #{id} AND user_id = #{userId} AND deleted_at is null
+    </select>
+    <select id="getDiaryListByVersionGroup" resultType="com.yanglizi.diary.pojo.entry.Diary">
+        SELECT
+            id,
+            user_id,
+            diary_date,
+            source_type,
+            emotion_score,
+            version_group,
+            version,
+            is_current,
+            confirmed_at,
+            created_at,
+            updated_at,
+            status
+        FROM diaries
+        WHERE version_group = #{versionGroup} AND user_id = #{userId} AND deleted_at is null
+        ORDER BY version DESC
+    </select>
+    <select id="getDiaryList" resultType="com.yanglizi.diary.pojo.vo.DiaryVo">
+        SELECT
+            a.id,
+            a.diary_date,
+            a.source_type,
+            a.emotions,
+            a.emotion_score,
+            a.version_group,
+            a.version,
+            a.is_current,
+            a.confirmed_at,
+            a.created_at,
+            a.updated_at,
+            a.status,
+            b.title
+        FROM diaries a
+            join chat_sessions b on a.version_group = b.version_group
+        where
+            a.user_id = #{userId}
+          and a.is_current = 1
+          AND a.deleted_at IS NULL
+        ORDER BY created_at DESC
+    </select>
+    <select id="getDiaryListByStatus" resultType="com.yanglizi.diary.pojo.vo.DiaryVo">
+        SELECT
+            a.id,
+            a.diary_date,
+            a.source_type,
+            a.emotions,
+            a.emotion_score,
+            a.version_group,
+            a.version,
+            a.is_current,
+            a.confirmed_at,
+            a.created_at,
+            a.updated_at,
+            a.status,
+            b.title
+        FROM diaries a
+                 join chat_sessions b on a.version_group = b.version_group
+        where
+            a.user_id = #{userId}
+          and a.status = #{status}
+          AND a.deleted_at IS NULL
+        ORDER BY a.created_at DESC
+    </select>
+    <select id="getStatusById" resultType="java.lang.Integer">
+        SELECT
+            status
+        FROM diaries
+        WHERE id = #{id} AND version_group = #{versionGroup} AND user_id = #{userId} AND deleted_at is null
+
+    </select>
+</mapper>

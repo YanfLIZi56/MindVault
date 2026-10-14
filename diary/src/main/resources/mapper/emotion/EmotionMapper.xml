@@ -1,0 +1,10 @@
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.yanglizi.diary.mapper.EmotionMapper">
+
+    <select id="selectEmotion" resultType="com.yanglizi.diary.pojo.entry.Emotion">
+        select tag from emotion where ai_gen = 0
+    </select>
+</mapper>

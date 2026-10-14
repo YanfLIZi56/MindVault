@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "MindVault AIGC 模块业务闭环",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "talk-loop",
+        "label": "对话闭环",
+        "focus": ["user", "session_api", "client", "chat_api", "intent", "engine", "redis"],
+        "note": "提问先落库，再过意图规则，关键词与会话状态都来自 Redis。"
+      },
+      {
+        "id": "gen-loop",
+        "label": "生成与定版",
+        "focus": ["reply", "diary_api", "diary_gen", "pg"],
+        "note": "前端按 done.action 触发生成，正文落库后确认定版。"
+      },
+      {
+        "id": "recall-loop",
+        "label": "检索回流",
+        "focus": ["engine", "pg"],
+        "note": "已定版日记经双路召回后重新注入主模型上下文。"
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "用户与前端" },
+    { "id": "api", "label": "接口与后台服务" },
+    { "id": "ai", "label": "模型层" },
+    { "id": "data", "label": "存储层" }
+  ],
+  "phases": [
+    { "id": "intake", "label": "建会话 · 提问", "fromCol": 0, "toCol": 1 },
+    { "id": "route", "label": "意图分流", "fromCol": 2, "toCol": 2, "variant": "emphasis" },
+    { "id": "answer", "label": "对话与检索", "fromCol": 3, "toCol": 3 },
+    { "id": "produce", "label": "回答 · 生成 · 定版", "fromCol": 4, "toCol": 5, "variant": "emphasis" }
+  ],
+  "mainPath": ["user", "session_api", "client", "chat_api", "intent", "engine", "reply", "diary_api", "diary_gen", "pg"],
+  "nodes": [
+    { "id": "user", "lane": "ui", "col": 0, "type": "external", "label": "用户", "sublabel": "讲述与确认", "width": 112 },
+    { "id": "session_api", "lane": "api", "col": 0, "type": "backend", "label": "SessionController", "sublabel": "创建或复用空会话", "tag": "开场白 round=0", "width": 128 },
+    { "id": "client", "lane": "ui", "col": 1, "type": "frontend", "label": "会话页", "sublabel": "发起提问 · 收流", "width": 112 },
+    { "id": "chat_api", "lane": "api", "col": 1, "type": "backend", "label": "ChatService 编排", "sublabel": "存问题 · 分类 · 存回答", "tag": "ChatController · SSE", "width": 128 },
+    { "id": "intent", "lane": "ai", "col": 2, "type": "backend", "label": "IntentClassifier", "sublabel": "规则优先 · 大模型兜底", "tag": "关键词热缓存", "width": 128 },
+    { "id": "redis", "lane": "data", "col": 2, "type": "database", "label": "Redis", "sublabel": "记忆 · 状态 · 关键词", "width": 128 },
+    { "id": "engine", "lane": "ai", "col": 3, "type": "backend", "label": "ChatClient 对话", "sublabel": "systemPrompt + 记忆 + 工具", "tag": "streamEnabled 可切", "width": 128 },
+    { "id": "reply", "lane": "ui", "col": 4, "type": "frontend", "label": "SSE 回答 · action", "sublabel": "前端据 action 再请求", "width": 128 },
+    { "id": "diary_api", "lane": "api", "col": 4, "type": "backend", "label": "DiaryController", "sublabel": "生成 · 确认 · 版本", "width": 128 },
+    { "id": "diary_gen", "lane": "api", "col": 5, "type": "backend", "label": "日记生成 @Async", "sublabel": "摘要 → 正文 + 心情", "tag": "读 raw_facts", "width": 128 },
+    { "id": "pg", "lane": "data", "col": 5, "type": "database", "label": "PostgreSQL", "sublabel": "业务表 + 索引 + 向量", "tag": "ParadeDB · PGVector", "width": 128 }
+  ],
+  "edges": [
+    { "id": "e-enter", "from": "user", "to": "session_api", "label": "进入应用", "variant": "default" },
+    { "id": "e-session", "from": "session_api", "to": "client", "label": "sessionId 下发", "variant": "emphasis", "fromSide": "top", "toSide": "left" },
+    { "id": "e-ask", "from": "client", "to": "chat_api", "label": "POST /chat/{sessionId}", "variant": "emphasis", "role": "main" },
+    { "id": "e-classify", "from": "chat_api", "to": "intent", "label": "自增轮次 · 分类", "variant": "emphasis", "role": "main" },
+    { "id": "e-keywords", "from": "redis", "to": "intent", "label": "关键词 · 会话状态", "variant": "dashed" },
+    { "id": "e-memory", "from": "redis", "to": "engine", "label": "L1 最近 10 条消息", "variant": "dashed" },
+    { "id": "e-model", "from": "intent", "to": "engine", "label": "走模型分支", "variant": "emphasis", "role": "main" },
+    { "id": "e-stream", "from": "engine", "to": "reply", "label": "SSE chunk / done", "variant": "emphasis", "role": "main" },
+    { "id": "e-recall", "from": "pg", "to": "engine", "label": "召回 Top-5", "variant": "emphasis", "role": "return" },
+    { "id": "e-action", "from": "reply", "to": "diary_api", "label": "done.action 回调", "variant": "emphasis", "role": "main" },
+    { "id": "e-trigger", "from": "diary_api", "to": "diary_gen", "label": "插入任务 → @Async", "variant": "emphasis", "role": "main" },
+    { "id": "e-factsin", "from": "pg", "to": "diary_gen", "label": "读取 raw_facts 摘要", "variant": "default", "role": "return" },
+    { "id": "e-diarywrite", "from": "diary_gen", "to": "pg", "label": "写回正文 · status=3", "variant": "emphasis", "role": "main" },
+    { "id": "e-confirm", "from": "diary_api", "to": "pg", "label": "confirm 定版", "variant": "emphasis", "role": "main" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "闭环要点",
+      "items": [
+        "CONFIRM_GENERATE 只回预置文案与 done.action，由前端再请求 /diary/{sessionId}",
+        "摘要窗口 = maxMsg / 2 = 5 轮，pending_round 乐观锁防重复，过期先补摘要",
+        "检索由主模型自主调用，BM25 与向量各召回 3 条，RRF(k=60) 融合取 Top-5"
+      ]
+    }
+  ]
+}

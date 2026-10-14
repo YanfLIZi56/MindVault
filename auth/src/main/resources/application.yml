@@ -1,0 +1,105 @@
+spring:
+  application:
+    name: auth
+  profiles:
+    active: local
+
+  ai:
+    openai:
+      base-url: ${API_URL}
+      api-key: ${API_KEY}
+      chat:
+        model: ${CHAT_MODEL}
+      embedding:
+        model: ${EMBEDDING_MODEL}
+        dimensions: 1536
+
+    vectorstore:
+      pgvector:
+        # 表名（默认 vector_store，可自定义）
+        table-name: diary_vector
+        # 向量维度（必须与 embedding 模型一致）
+        dimensions: 1536
+        # 距离类型：COSINE_DISTANCE（默认）、EUCLIDEAN_DISTANCE、NEGATIVE_INNER_PRODUCT[reference:1]
+        distance-type: COSINE_DISTANCE
+        # 索引类型：HNSW（默认，推荐）、IVFFLAT、NONE[reference:2]
+        index-type: HNSW
+        # 是否自动建表
+        initialize-schema: true
+
+  # 连接数据库
+  datasource:
+    url: jdbc:postgresql://${pg.host}:${pg.port}/${pg.database}
+    username: ${pg.user}
+    password: ${pg.password}
+    driver-class-name: org.postgresql.Driver
+
+#  mail:
+
+  # 文件上传
+  servlet:
+    multipart:
+      # 单个文件大小
+      max-file-size: 10MB
+      # 设置总上传的文件大小
+      max-request-size: 20MB
+
+  # redis 配置
+  data:
+    redis:
+      host: ${redis.host}
+      port: ${redis.port}
+      database: ${redis.database}
+      timeout: 10s
+#      password:
+
+
+# MyBatis配置
+mybatis:
+  # 配置mapper的扫描，找到所有的mapper.xml映射文件
+  mapper-locations: classpath*:mapper/**/*.xml
+  # 加载全局的配置文件
+  configLocation: classpath:mybatis/mybatis-config.xml
+  type-handlers-package: com.yanglizi.common.handler
+
+
+mindVault:
+  account-charset: ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz
+  # 账号长度
+  account-length: 8
+  captcha:
+    type: number
+    timeout: 5
+  diary:
+    emotionSize: 10
+  jev:
+    api:
+      key: ${JEV_API_KEY}
+      url: ${JEV_API_URL:https://api.typesafe.ai/v1/systemone}
+    minConfidence: 0.5
+    model: jev-latest
+
+ai:
+  greeting: ${GREETING}
+  streamEnabled: ${STREAM_ENABLED}
+  systemPrompt: ${SYSTEM_PROMPT}
+  genRawFactsPrompt: ${GEN_RAW_FACTS_PROMPT}
+  genDiaryPrompt: ${GEN_DIARY_PROMPT}
+  memory:
+    maxMsg: ${MEMORY_MAX_MSG:10}
+
+snow:
+  worker-id: 1
+  data-center-id: 1
+
+cors:
+  allowOrigins:
+    - "*"
+
+jwt:
+  accessToken:
+    expireTime: 600s
+    secret-key: u8QL3AHlvroYkZ7G4EyCQeWcIcaDnmVJpgKIQLDA+Aw=
+  refreshToken:
+    # 7天
+    expireTime: 604800

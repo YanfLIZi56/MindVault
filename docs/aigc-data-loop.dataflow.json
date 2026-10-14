@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "MindVault AIGC 数据闭环",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "viewBox": [1075, 520],
+    "views": [
+      {
+        "id": "turn-write",
+        "label": "每轮写入",
+        "focus": ["chat_api", "convs", "redis"],
+        "note": "一问一答按轮次落库，L1 记忆、会话状态与关键词都放在 Redis。"
+      },
+      {
+        "id": "memory-compress",
+        "label": "摘要压缩",
+        "focus": ["convs", "summarizer", "diary_gen"],
+        "note": "每 5 轮把新对话并入旧摘要，摘要再作为日记生成的唯一事实输入。"
+      },
+      {
+        "id": "index-recall",
+        "label": "索引与召回",
+        "focus": ["diaries", "recall", "engine"],
+        "note": "日记正文同时进 BM25 与向量库，双路召回经 RRF 融合回到主模型。"
+      }
+    ]
+  },
+  "stages": [
+    { "label": "写入入口" },
+    { "label": "会话存储" },
+    { "label": "摘要压缩" },
+    { "label": "日记生成" },
+    { "label": "索引与召回" }
+  ],
+  "nodes": [
+    { "id": "chat_api", "type": "backend", "label": "ChatService", "sublabel": "每轮问答落库", "stage": 0, "row": 2, "width": 134, "tag": "last_round+1" },
+    { "id": "convs", "type": "database", "label": "diary_conversations", "sublabel": "对话明细", "stage": 1, "row": 2, "width": 134, "tag": "round · speaker" },
+    { "id": "redis", "type": "database", "label": "Redis", "sublabel": "记忆 · 状态 · 关键词", "stage": 1, "row": 0, "width": 134, "tag": "TTL 30min ～ 24h" },
+    { "id": "summarizer", "type": "backend", "label": "增量摘要 @Async", "sublabel": "合并旧摘要与新对话", "stage": 2, "row": 2, "width": 134, "tag": "乐观锁 pending_round" },
+    { "id": "diary_gen", "type": "backend", "label": "日记生成 @Async", "sublabel": "正文 + 心情 + 情绪分", "stage": 3, "row": 2, "width": 134, "tag": "读 raw_facts" },
+    { "id": "diaries", "type": "database", "label": "diaries", "sublabel": "日记主表 · 双索引", "stage": 3, "row": 0, "width": 134, "tag": "status · is_current" },
+    { "id": "recall", "type": "messagebus", "label": "双路召回", "sublabel": "BM25 + 向量 → RRF", "stage": 4, "row": 2, "width": 134, "tag": "各 3 条 → Top-5" },
+    { "id": "engine", "type": "external", "label": "主模型上下文", "sublabel": "检索结果回注 prompt", "stage": 4, "row": 0, "width": 134, "tag": "searchDiaries 工具" }
+  ],
+  "flows": [
+    { "from": "chat_api", "to": "convs", "label": "问答落库", "classification": "speaker 1/2 · 同 round", "variant": "emphasis", "route": "straight", "labelDy": 53, "labelDx": -70 },
+    { "from": "chat_api", "to": "redis", "label": "记忆状态", "classification": "L1 消息 · chat:state", "variant": "dashed", "fromSide": "right", "toSide": "left", "route": "auto", "labelDx": 40, "labelDy": -52 },
+    { "from": "convs", "to": "summarizer", "label": "增量摘要", "classification": "round > raw_facts_last_round", "variant": "emphasis", "route": "straight", "labelDy": 53 },
+    { "from": "summarizer", "to": "diary_gen", "label": "摘要输入", "classification": "写回 raw_facts · 过期先补", "variant": "emphasis", "route": "straight", "labelDy": 53, "labelDx": -32 },
+    { "from": "diary_gen", "to": "diaries", "label": "写回正文", "classification": "status=3 完成 / 4 失败", "variant": "emphasis", "route": "vertical-channel" },
+    { "from": "diaries", "to": "recall", "label": "双路召回", "classification": "BM25 3 条 + 向量 3 条", "variant": "emphasis", "fromSide": "right", "toSide": "left", "route": "auto", "labelDy": 53 },
+    { "from": "recall", "to": "engine", "label": "回注上下文", "classification": "RRF(k=60) 融合去重", "variant": "emphasis", "route": "vertical-channel" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "数据闭环要点",
+      "items": [
+        "chat_sessions.last_round 用单条 UPDATE ... RETURNING 原子取轮次，raw_facts 摘要与 version_group 同表保存",
+        "每 5 轮触发增量摘要，pending_round 乐观锁防重复；生成前校验摘要轮次，过期就地补摘要",
+        "同一份 diaries.content 同时服务 ParadeDB 全文检索与 PGVector 向量检索，确认定版只切 is_current"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.yanglizi.aigc.mapper.ChatMapper">
+
+    <insert id="createSession">
+        insert into chat_sessions (id, user_id, status, title) values (#{id}, #{userId}, #{status}, #{title})
+    </insert>
+    <insert id="createConversation">
+        insert into diary_conversations (session_id, round, speaker, content) values (#{sessionId}, #{round}, #{speaker}, #{content})
+    </insert>
+    <insert id="saveConversation">
+        insert into diary_conversations (session_id, content, round, speaker) values (#{sessionId}, #{content}, #{round}, #{speaker})
+    </insert>
+    <update id="tryLockRawFactsRound">
+        update chat_sessions
+        set raw_facts_pending_round = #{round}
+        where id = #{sessionId}
+        and raw_facts_last_round &lt; #{round}
+        and (raw_facts_pending_round is null or raw_facts_pending_round &lt; #{round});
+    </update>
+    <update id="generateRawFacts">
+        update chat_sessions
+        set raw_facts = #{newRawFacts},
+            raw_facts_last_round = #{round},
+            raw_facts_pending_round = null
+        where id = #{sessionId} and raw_facts_pending_round = #{round}
+    </update>
+    <update id="updateChatSession">
+        update chat_sessions
+        <set>
+            <if test="dto.title != null and dto.title != ''">
+                title = #{dto.title},
+            </if>
+            <if test="dto.rawFacts != null and dto.rawFacts != ''">
+                raw_facts = #{dto.rawFacts},
+            </if>
+            updated_at = now()
+        </set>
+        where id = #{sessionId} and user_id = #{userId}
+    </update>
+    <select id="checkSession" resultType="java.lang.Integer">
+        select count(*) from chat_sessions where id = #{sessionId} and user_id = #{userId}
+    </select>
+    <select id="getNewRound" resultType="java.lang.Integer">
+        update chat_sessions set last_round = last_round + 1, updated_at = #{now} where id = #{sessionId} and user_id = #{userId} RETURNING last_round
+    </select>
+    <select id="getRawFacts" resultType="java.lang.String">
+        select raw_facts from chat_sessions where id = #{sessionId} and user_id = #{userId}
+    </select>
+    <select id="selectRawFactsLastRound" resultType="com.yanglizi.aigc.pojo.entry.ChatSession">
+        select raw_facts as rawFacts, raw_facts_last_round as rawFactsLastRound from chat_sessions where id = #{sessionId}
+    </select>
+    <select id="selectConversationByRoundRange" resultType="com.yanglizi.aigc.pojo.entry.DiaryConversations">
+        select round, speaker, content from diary_conversations where session_id = #{sessionId} and round &gt; #{diff}
+    </select>
+    <select id="getChatHistory" resultType="com.yanglizi.aigc.pojo.entry.DiaryConversations">
+        select id, round, speaker, content,created_at
+        from diary_conversations
+        where session_id = #{sessionId}
+        <if test="cursor != null">
+            AND round &lt; #{cursor}
+        </if>
+        order by round
+        <if test="size != null">
+            limit #{size}
+        </if>
+    </select>
+    <select id="hasConversation" resultType="java.lang.Integer">
+        select count(*) from diary_conversations where session_id = #{sessionId}
+        and round &gt; 0
+        limit 1
+    </select>
+    <select id="getSessionByUserId" resultType="com.yanglizi.aigc.pojo.vo.ChatSessionVo">
+        select id, title, status, version_group, started_at, updated_at, finished_at
+        from chat_sessions
+        where user_id = #{userId} and last_round > 0
+        order by updated_at desc
+    </select>
+    <select id="selectSessionById" resultType="com.yanglizi.aigc.pojo.entry.ChatSession">
+        select id, title, status, version_group, last_round, raw_facts, raw_facts_last_round, started_at, updated_at, finished_at
+        from chat_sessions
+        where id = #{sessionId}
+    </select>
+    <select id="selectSessionByIdAndUserId" resultType="com.yanglizi.aigc.pojo.entry.ChatSession">
+        select id, title, status, version_group, last_round, raw_facts, raw_facts_last_round, raw_facts_pending_round, started_at, updated_at, finished_at
+        from chat_sessions
+        where id = #{sessionId} and user_id = #{userId}
+    </select>
+
+</mapper>

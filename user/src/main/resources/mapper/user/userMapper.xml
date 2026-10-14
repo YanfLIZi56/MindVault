@@ -1,0 +1,71 @@
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.yanglizi.user.mapper.UserMapper">
+    <insert id="createUser" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO users
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="account != null">account,</if>
+            <if test="phone != null">phone,</if>
+            <if test="password != null">password,</if>
+            <if test="nickname != null">nickname,</if>
+            <if test="gender != null">gender,</if>
+            <if test="avatarUrl != null">avatar_url,</if>
+            <if test="level != null">level,</if>
+            <if test="bio != null and bio != ''">bio,</if>
+            <if test="lastLoginAt != null">last_login_at,</if>
+        </trim>
+        VALUES
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="account != null">#{account},</if>
+            <if test="phone != null">#{phone},</if>
+            <if test="password != null">#{password},</if>
+            <if test="nickname != null">#{nickname},</if>
+            <if test="gender != null">#{gender},</if>
+            <if test="avatarUrl != null">#{avatarUrl},</if>
+            <if test="level != null">#{level},</if>
+            <if test="bio != null and bio != ''">#{bio},</if>
+            <if test="lastLoginAt != null">#{lastLoginAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateLoginTime">
+        update users
+        set last_login_at = #{lastLoginAt}
+        where id = #{id}
+          and deleted_at = 0
+    </update>
+
+
+    <select id="existId" resultType="java.lang.Integer">
+        select count(*)
+        from users
+        where id = #{id}
+          and deleted_at = 0
+    </select>
+
+    <select id="selectLoginUser" resultType="com.yanglizi.user.pojo.vo.UserLoginVo">
+        select id, account, nickname, avatar_url, level
+        from users
+        <where>
+            <if test="account != null and account != ''">account = #{account}</if>
+            <if test="password != null and password != ''">and password = #{password}</if>
+            <if test="phone != null and phone != ''">and phone = #{phone}</if>
+            and deleted_at = 0
+        </where>
+    </select>
+
+    <select id="existAccount" resultType="java.lang.Integer">
+        select count(*)
+        from users
+        where account = #{account}
+          and deleted_at = 0
+    </select>
+    <select id="getUserLevelId" resultType="java.lang.Integer">
+        select level
+        from users
+        where id = #{userId}
+          and deleted_at = 0
+    </select>
+</mapper>
